@@ -1,31 +1,31 @@
 .Dockerfile
 
-docker-compose.yml:
-version: '3.8'
+; docker-compose.yml:
+; version: '3.8'
 
-services:
-  web:
-    # במקום למשוך Image מוכן, אנחנו בונים את ה-Dockerfile של ה-React שנמצא בתיקייה הנוכחית
-    build: .
-    container_name: react-app-container
-    restart: unless-stopped
-    # הגדרת משתנה סביבה כדי ש-React ידע להשתמש בפורט 3003 בתוך הקונטיינר
-    environment:
-      - PORT=3003
-    # חשיפת הפורט הפנימי (אופציונלי אם Nginx ניגש אליו, אבל מומלץ לבדיקות)
-    ports:
-      - "3003:3003"
+; services:
+;   web:
+;     # במקום למשוך Image מוכן, אנחנו בונים את ה-Dockerfile של ה-React שנמצא בתיקייה הנוכחית
+;     build: .
+;     container_name: react-app-container
+;     restart: unless-stopped
+;     # הגדרת משתנה סביבה כדי ש-React ידע להשתמש בפורט 3003 בתוך הקונטיינר
+;     environment:
+;       - PORT=3003
+;     # חשיפת הפורט הפנימי (אופציונלי אם Nginx ניגש אליו, אבל מומלץ לבדיקות)
+;     ports:
+;       - "3003:3003"
 
-  nginx:
-    image: nginx:latest
-    container_name: nginx_proxy
-    restart: unless-stopped
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      # וודא שקובץ ה-nginx.conf שלך מעודכן לשלוח תנועה ל-web:3003
-      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
-      - /etc/letsencrypt:/etc/letsencrypt:ro
-    depends_on:
-      - web
+;   nginx:
+;     image: nginx:latest
+;     container_name: nginx_proxy
+;     restart: unless-stopped
+;     ports:
+;       - "80:80"
+;       - "443:443"
+;     volumes:
+;       # וודא שקובץ ה-nginx.conf שלך מעודכן לשלוח תנועה ל-web:3003
+;       - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+;       - /etc/letsencrypt:/etc/letsencrypt:ro
+;     depends_on:
+;       - web
