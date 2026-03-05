@@ -1,0 +1,88 @@
+name: CD - Build, Push & Deploy React
+
+on:
+  push:
+    branches: [ "main" ]
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ secrets.DOCKERHUB_USERNAME }}/react_project_mor:latest
+            ${{ secrets.DOCKERHUB_USERNAME }}/react_project_mor:${{ github.sha }} 
+          # שים לב ששיניתי ל-linux/amd64 אם השרת שלך הוא שרת ענן סטנדרטי (כמו AWS/DigitalOcean)
+          platforms: linux/amd64 
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: build-and-push
+
+    steps:
+      - name: Deploy to server via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          envs: DOCKERHUB_USERNAME,DOCKERHUB_TOKEN
+          script: |
+            set -e
+            # שנה את הנתיב לנתיב הפרויקט החדש בשרת שלך
+            cd /home/ubuntu/Devops_year_3/react_project_test
+            
+            sudo rm -rf nginx.conf
+            
+            # יצירת קובץ nginx.conf שמותאם ל-React ופורט 3003
+            cat <<EOF > nginx.conf
+            server {
+                listen 80;
+                server_name mor-react.duckdns.org; # שנה לכתובת שלך
+
+                location / {
+                    proxy_pass http://web:3003; # השינוי המרכזי לפורט 3003
+                    proxy_http_version 1.1;
+                    proxy_set_header Upgrade \$http_upgrade;
+                    proxy_set_header Connection 'upgrade';
+                    proxy_set_header Host \$host;
+                    proxy_cache_bypass \$http_upgrade;
+                }
+            }
+            EOF
+
+            sudo iptables -I INPUT 6 -m state --state NEW -p tcp --dport 80 -j ACCEPT || true
+            sudo systemctl stop nginx || true
+            
+            docker compose down || true
+            
+            echo "$DOCKERHUB_TOKEN" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
+            
+            # עדכון קובץ ה-env עם שם ה-Image וה-Tag הנכונים
+            echo "DOCKERHUB_USERNAME=$DOCKERHUB_USERNAME" > .env
+            echo "IMAGE_TAG=${{ github.sha }}" >> .env
+            
+            docker compose pull
+            docker compose up -d --force-recreate
